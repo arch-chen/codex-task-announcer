@@ -1,0 +1,25 @@
+{
+  "packageName": "CodexTaskAnnouncer-Portable",
+  "packageVersion": "2026.08.28.1",
+  "pluginName": "codex-task-announcer",
+  "pluginVersion": "0.1.0+codex.20260827174632",
+  "platform": "Windows",
+  "defaultVoice": "xiaoxiao",
+  "voiceAliases": [
+    "xiaoxiao",
+    "xiaoyi",
+    "yunxi",
+    "yunyang",
+    "yunjian",
+    "yunxia"
+  ],
+  "containsSecrets": false,
+  "runtimeModelStorage": "online-with-local-mp3-cache",
+  "entrypoints": {
+    "codexInstructions": "00_请目标设备Codex先阅读.md",
+    "installer": "install.ps1",
+    "restore": "restore.ps1",
+    "verify": "VERIFY_PACKAGE.ps1",
+    "preview": "PREVIEW_ALL_VOICES.cmd"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "enabled": true,
+  "suffix": "已完成",
+  "fallbackToDirectoryName": true,
+  "onlineTts": {
+    "enabled": true,
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "language": "zh-CN",
+    "rate": "-5%",
+    "pitch": "+0Hz",
+    "volume": "+0%",
+    "timeoutMs": 20000,
+    "nodePath": "",
+    "voices": [
+      { "alias": "xiaoxiao", "id": "zh-CN-XiaoxiaoNeural", "displayName": "晓晓（自然女声）", "gender": "女" },
+      { "alias": "xiaoyi", "id": "zh-CN-XiaoyiNeural", "displayName": "晓伊（清亮女声）", "gender": "女" },
+      { "alias": "yunxi", "id": "zh-CN-YunxiNeural", "displayName": "云希（青年男声）", "gender": "男" },
+      { "alias": "yunyang", "id": "zh-CN-YunyangNeural", "displayName": "云扬（专业男声）", "gender": "男" },
+      { "alias": "yunjian", "id": "zh-CN-YunjianNeural", "displayName": "云健（沉稳男声）", "gender": "男" },
+      { "alias": "yunxia", "id": "zh-CN-YunxiaNeural", "displayName": "云夏（少年男声）", "gender": "男" }
+    ]
+  },
+  "projects": [],
+  "forwardCommand": []
+}

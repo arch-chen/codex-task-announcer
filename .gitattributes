@@ -1,0 +1,18 @@
+* text=auto
+*.mp3 binary
+
+# The release manifest hashes exact package bytes. Do not rewrite packaged files.
+/plugin/** -text
+/previews/** -text
+/*.ps1 -text
+/*.cmd -text
+/00_*.md -text
+/DEPLOYMENT_GUIDE.md -text
+/package-manifest.json -text
+/语音试听与选择.md -text
+
+/README.md text eol=lf
+/LICENSE text eol=lf
+/.gitignore text eol=lf
+/.gitattributes text eol=lf
+/SHA256SUMS.txt text eol=lf
