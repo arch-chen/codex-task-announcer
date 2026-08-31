@@ -1,8 +1,8 @@
 {
   "packageName": "CodexTaskAnnouncer-Portable",
-  "packageVersion": "2026.08.31.1",
+  "packageVersion": "2026.08.31.2",
   "pluginName": "codex-task-announcer",
-  "pluginVersion": "0.2.0",
+  "pluginVersion": "0.2.1",
   "platform": "Windows",
   "defaultVoice": "xiaoxiao",
   "voiceAliases": [

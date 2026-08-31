@@ -1,6 +1,6 @@
 {
   "name": "codex-task-announcer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Announces manual Codex turn completions with switchable Chinese neural voices while suppressing automation runs.",
   "author": {
     "name": "Codex Task Announcer contributors"

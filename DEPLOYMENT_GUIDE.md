@@ -54,4 +54,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -ProjectPa
 7. 更新默认个人市场并运行 `codex plugin add`。
 8. 写出安装结果 JSON 和备份位置。
 
-安装后应完全退出并重新打开 Codex。在线语音只发送“项目名称 + 已完成”这一句，不发送任务内容或代码；生成的音频会缓存在 `%LOCALAPPDATA%\CodexTaskAnnouncer\audio-cache`。自动化识别依赖事件元数据和 `%CODEX_HOME%\automations` 中的目标线程配置；未明确识别的普通任务会继续播报。
+安装后应完全退出并重新打开 Codex。在线语音只发送“项目名称 + 已完成”这一句，不发送任务内容或代码；生成的音频会缓存在 `%LOCALAPPDATA%\CodexTaskAnnouncer\audio-cache`。自动化识别依赖事件元数据、`%CODEX_HOME%\automations` 中的目标线程配置，以及最近会话的 `session_meta.thread_source`；未明确识别的普通任务会继续播报。

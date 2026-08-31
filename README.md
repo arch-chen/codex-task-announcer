@@ -82,7 +82,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\restore.ps1 `
 
 自然语音通过 Microsoft Edge 在线语音服务生成，不需要 API 密钥。插件只发送“项目名称 + 已完成”这一句播报文本，不发送任务内容或代码。生成的音频和运行日志保存在 `%LOCALAPPDATA%\CodexTaskAnnouncer`。
 
-自动化过滤默认由 `project-names.json` 中的 `suppressAutomationAnnouncements: true` 开启。插件优先识别事件的自动化元数据，并使用 `%CODEX_HOME%\automations\*\automation.toml` 中的 `target_thread_id` 作为回退。只有明确命中自动化任务时才静音；原有通知转发不受影响。将该设置改为 `false` 可恢复自动化任务播报。
+自动化过滤默认由 `project-names.json` 中的 `suppressAutomationAnnouncements: true` 开启。插件优先识别事件的自动化元数据，再检查 `%CODEX_HOME%\automations\*\automation.toml` 中的 `target_thread_id`；若通知使用回合标识，还会用该标识核对最近会话的 `session_meta.thread_source`。只有明确命中自动化任务时才静音；原有通知转发不受影响。将该设置改为 `false` 可恢复自动化任务播报。
 
 Codex 当前提供的是 `agent-turn-complete` 通知，而不是业务结果的“成功”事件。因此，普通任务的最终回复、澄清问题和阻塞报告都可能触发播报。
 

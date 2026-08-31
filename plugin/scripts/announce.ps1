@@ -55,16 +55,141 @@ function Get-TomlStringValue {
     return ''
 }
 
-function Get-CodexHome {
-    if (-not [string]::IsNullOrWhiteSpace([string]$env:CODEX_HOME)) {
-        return [string]$env:CODEX_HOME
+function Get-CodexHomes {
+    $pluginUserHome = Split-Path -Parent (Split-Path -Parent $pluginRoot)
+    $profileHome = [Environment]::GetFolderPath('UserProfile')
+    $candidates = @(
+        (Join-Path $pluginUserHome '.codex'),
+        [string]$env:CODEX_HOME,
+        (Join-Path $env:USERPROFILE '.codex'),
+        (Join-Path $profileHome '.codex')
+    )
+
+    $resolved = @()
+    foreach ($candidate in $candidates) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate) -and $resolved -notcontains $candidate) {
+            $resolved += $candidate
+        }
     }
-    return Join-Path $env:USERPROFILE '.codex'
+    return @($resolved)
+}
+
+function Get-EventIdentifiers {
+    param([object]$Event)
+
+    $names = @(
+        'thread-id', 'thread_id', 'threadId',
+        'turn-id', 'turn_id', 'turnId',
+        'conversation-id', 'conversation_id', 'conversationId',
+        'task-id', 'task_id', 'taskId'
+    )
+    $identifiers = @()
+    foreach ($name in $names) {
+        $value = Get-EventValue -Event $Event -Names @($name)
+        if (-not [string]::IsNullOrWhiteSpace($value) -and $identifiers -notcontains $value) {
+            $identifiers += $value
+        }
+    }
+    return @($identifiers)
+}
+
+function Test-FileTailContainsIdentifier {
+    param(
+        [string]$Path,
+        [string[]]$Identifiers
+    )
+
+    $stream = New-Object IO.FileStream(
+        $Path,
+        [IO.FileMode]::Open,
+        [IO.FileAccess]::Read,
+        [IO.FileShare]::ReadWrite
+    )
+    try {
+        $maximumBytes = 8MB
+        $start = [Math]::Max(0, $stream.Length - $maximumBytes)
+        [void]$stream.Seek($start, [IO.SeekOrigin]::Begin)
+        $reader = New-Object IO.StreamReader($stream, (New-Object Text.UTF8Encoding($false)), $true, 4096, $true)
+        try {
+            $tail = $reader.ReadToEnd()
+        }
+        finally {
+            $reader.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+
+    foreach ($identifier in $Identifiers) {
+        if ($tail.Contains($identifier)) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Get-AutomationSessionMatch {
+    param(
+        [string[]]$Identifiers,
+        [string]$CodexHome
+    )
+
+    if ($Identifiers.Count -eq 0) {
+        return $null
+    }
+
+    $sessionsRoot = Join-Path $CodexHome 'sessions'
+    if (-not (Test-Path -LiteralPath $sessionsRoot -PathType Container)) {
+        return $null
+    }
+
+    try {
+        $recentThreshold = (Get-Date).AddMinutes(-15)
+        $sessionFiles = @(Get-ChildItem -LiteralPath $sessionsRoot -Filter '*.jsonl' -File -Recurse -ErrorAction Stop |
+            Where-Object { $_.LastWriteTime -ge $recentThreshold } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 20)
+    }
+    catch {
+        Write-AnnouncerLog "Session metadata scan failed; announcement remains enabled: $($_.Exception.Message)"
+        return $null
+    }
+
+    foreach ($sessionFile in $sessionFiles) {
+        try {
+            $firstLine = Get-Content -LiteralPath $sessionFile.FullName -TotalCount 1 -Encoding UTF8 -ErrorAction Stop
+            $meta = ($firstLine | ConvertFrom-Json).payload
+            if ([string]$meta.thread_source -ine 'automation') {
+                continue
+            }
+
+            $sessionId = [string]$meta.id
+            $identifierMatched = $Identifiers -contains $sessionId
+            if (-not $identifierMatched) {
+                $identifierMatched = Test-FileTailContainsIdentifier -Path $sessionFile.FullName -Identifiers $Identifiers
+            }
+            if ($identifierMatched) {
+                if ([string]::IsNullOrWhiteSpace($sessionId)) { $sessionId = $sessionFile.BaseName }
+                return [PSCustomObject]@{
+                    Id = $sessionId
+                    Kind = 'automation-session'
+                    ThreadId = [string]$Identifiers[0]
+                }
+            }
+        }
+        catch {
+            Write-AnnouncerLog "Ignored unreadable session metadata: $($sessionFile.FullName)"
+        }
+    }
+
+    return $null
 }
 
 function Get-AutomationMatch {
     param([object]$Event)
 
+    $identifiers = @(Get-EventIdentifiers -Event $Event)
     $threadId = Get-EventValue -Event $Event -Names @('thread-id', 'thread_id', 'threadId')
     $threadSource = Get-EventValue -Event $Event -Names @('thread-source', 'thread_source', 'threadSource')
     if ($threadSource -ieq 'automation') {
@@ -79,46 +204,51 @@ function Get-AutomationMatch {
         }
     }
 
-    if ([string]::IsNullOrWhiteSpace($threadId)) {
-        return $null
-    }
+    $codexHomes = @(Get-CodexHomes)
+    if (-not [string]::IsNullOrWhiteSpace($threadId)) {
+        foreach ($codexHome in $codexHomes) {
+            $automationsRoot = Join-Path $codexHome 'automations'
+            if (Test-Path -LiteralPath $automationsRoot -PathType Container) {
+                try {
+                    $automationFiles = @(Get-ChildItem -LiteralPath $automationsRoot -Filter 'automation.toml' -File -Recurse -ErrorAction Stop)
+                }
+                catch {
+                    Write-AnnouncerLog "Automation metadata scan failed for ${codexHome}; checking other sources: $($_.Exception.Message)"
+                    $automationFiles = @()
+                }
 
-    $automationsRoot = Join-Path (Get-CodexHome) 'automations'
-    if (-not (Test-Path -LiteralPath $automationsRoot -PathType Container)) {
-        return $null
-    }
+                foreach ($automationFile in $automationFiles) {
+                    try {
+                        $content = Get-Content -LiteralPath $automationFile.FullName -Raw -Encoding UTF8 -ErrorAction Stop
+                        $targetThreadId = Get-TomlStringValue -Content $content -Key 'target_thread_id'
+                        if ($targetThreadId -ne $threadId) {
+                            continue
+                        }
 
-    try {
-        $automationFiles = @(Get-ChildItem -LiteralPath $automationsRoot -Filter 'automation.toml' -File -Recurse -ErrorAction Stop)
-    }
-    catch {
-        Write-AnnouncerLog "Automation metadata scan failed; announcement remains enabled: $($_.Exception.Message)"
-        return $null
-    }
-
-    foreach ($automationFile in $automationFiles) {
-        try {
-            $content = Get-Content -LiteralPath $automationFile.FullName -Raw -Encoding UTF8 -ErrorAction Stop
-            $targetThreadId = Get-TomlStringValue -Content $content -Key 'target_thread_id'
-            if ($targetThreadId -ne $threadId) {
-                continue
-            }
-
-            $automationId = Get-TomlStringValue -Content $content -Key 'id'
-            $kind = Get-TomlStringValue -Content $content -Key 'kind'
-            if ([string]::IsNullOrWhiteSpace($automationId)) { $automationId = $automationFile.Directory.Name }
-            if ([string]::IsNullOrWhiteSpace($kind)) { $kind = 'automation' }
-            return [PSCustomObject]@{
-                Id = $automationId
-                Kind = $kind
-                ThreadId = $threadId
+                        $automationId = Get-TomlStringValue -Content $content -Key 'id'
+                        $kind = Get-TomlStringValue -Content $content -Key 'kind'
+                        if ([string]::IsNullOrWhiteSpace($automationId)) { $automationId = $automationFile.Directory.Name }
+                        if ([string]::IsNullOrWhiteSpace($kind)) { $kind = 'automation' }
+                        return [PSCustomObject]@{
+                            Id = $automationId
+                            Kind = $kind
+                            ThreadId = $threadId
+                        }
+                    }
+                    catch {
+                        Write-AnnouncerLog "Ignored unreadable automation metadata: $($automationFile.FullName)"
+                    }
+                }
             }
         }
-        catch {
-            Write-AnnouncerLog "Ignored unreadable automation metadata: $($automationFile.FullName)"
-        }
     }
 
+    foreach ($codexHome in $codexHomes) {
+        $sessionMatch = Get-AutomationSessionMatch -Identifiers $identifiers -CodexHome $codexHome
+        if ($sessionMatch) {
+            return $sessionMatch
+        }
+    }
     return $null
 }
 

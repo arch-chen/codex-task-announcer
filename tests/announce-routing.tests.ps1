@@ -51,6 +51,58 @@ target_thread_id = "thread-automation"
         (New-Object Text.UTF8Encoding($false))
     )
 
+    $sessionDirectory = Join-Path $temporaryCodexHome 'sessions\2026\08\31'
+    New-Item -ItemType Directory -Path $sessionDirectory -Force | Out-Null
+    $automationSessionLines = @(
+        ([ordered]@{
+            timestamp = (Get-Date).ToUniversalTime().ToString('o')
+            type = 'session_meta'
+            payload = [ordered]@{
+                id = 'session-automation'
+                thread_source = 'automation'
+                cwd = 'C:\Projects\Shared'
+            }
+        } | ConvertTo-Json -Compress),
+        ([ordered]@{
+            timestamp = (Get-Date).ToUniversalTime().ToString('o')
+            type = 'response_item'
+            payload = [ordered]@{
+                type = 'message'
+                internal_chat_message_metadata_passthrough = [ordered]@{ turn_id = 'turn-automation' }
+            }
+        } | ConvertTo-Json -Compress)
+    )
+    [IO.File]::WriteAllLines(
+        (Join-Path $sessionDirectory 'rollout-session-automation.jsonl'),
+        $automationSessionLines,
+        (New-Object Text.UTF8Encoding($false))
+    )
+
+    $manualSessionLines = @(
+        ([ordered]@{
+            timestamp = (Get-Date).ToUniversalTime().ToString('o')
+            type = 'session_meta'
+            payload = [ordered]@{
+                id = 'session-manual'
+                thread_source = 'cli'
+                cwd = 'C:\Projects\Shared'
+            }
+        } | ConvertTo-Json -Compress),
+        ([ordered]@{
+            timestamp = (Get-Date).ToUniversalTime().ToString('o')
+            type = 'response_item'
+            payload = [ordered]@{
+                type = 'message'
+                internal_chat_message_metadata_passthrough = [ordered]@{ turn_id = 'turn-manual-session' }
+            }
+        } | ConvertTo-Json -Compress)
+    )
+    [IO.File]::WriteAllLines(
+        (Join-Path $sessionDirectory 'rollout-session-manual.jsonl'),
+        $manualSessionLines,
+        (New-Object Text.UTF8Encoding($false))
+    )
+
     Assert-RoutingResult -Name 'configured automation thread is silent' -Expected 'skip:automation' -Event @{
         type = 'agent-turn-complete'
         'thread-id' = 'thread-automation'
@@ -60,6 +112,16 @@ target_thread_id = "thread-automation"
         type = 'agent-turn-complete'
         thread_id = 'thread-not-configured'
         thread_source = 'automation'
+        cwd = 'C:\Projects\Shared'
+    }
+    Assert-RoutingResult -Name 'automation session turn identifier is silent' -Expected 'skip:automation' -Event @{
+        type = 'agent-turn-complete'
+        'thread-id' = 'turn-automation'
+        cwd = 'C:\Projects\Shared'
+    }
+    Assert-RoutingResult -Name 'manual session turn identifier still announces' -Expected 'announce' -Event @{
+        type = 'agent-turn-complete'
+        'thread-id' = 'turn-manual-session'
         cwd = 'C:\Projects\Shared'
     }
     Assert-RoutingResult -Name 'manual thread in same project still announces' -Expected 'announce' -Event @{
