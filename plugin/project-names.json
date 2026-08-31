@@ -1,5 +1,6 @@
 {
   "enabled": true,
+  "suppressAutomationAnnouncements": true,
   "suffix": "已完成",
   "fallbackToDirectoryName": true,
   "onlineTts": {

@@ -1,11 +1,12 @@
 # Codex 任务完成播报
 
-此目录是插件本体，由部署包根目录的 `install.ps1` 安装。插件在 Codex 回合结束时按项目名称响铃并播报。
+此目录是插件本体，由部署包根目录的 `install.ps1` 安装。插件在手动 Codex 回合结束时按项目名称响铃并播报，自动化任务默认静音。
 
 - 默认音色：晓晓（中国大陆自然女声）
 - 可切换：晓伊、云希、云扬、云健、云夏
 - 在线神经语音会按“文本 + 音色”缓存在目标设备
 - 在线服务失败时自动使用 Windows 本地语音后备
 - 目标设备原有的 Codex 通知命令会被保留并转发
+- 自动化事件或自动化配置中的目标线程不会触发响铃和语音
 
-音色与项目映射保存在 `project-names.json`。安装后可使用 `scripts/set-voice.ps1` 切换音色。
+音色、项目映射和 `suppressAutomationAnnouncements` 开关保存在 `project-names.json`。安装后可使用 `scripts/set-voice.ps1` 切换音色。

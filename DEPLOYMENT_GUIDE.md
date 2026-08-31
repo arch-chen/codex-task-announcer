@@ -49,8 +49,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -ProjectPa
 2. 定位目标设备的 Codex、Node.js 和用户目录。
 3. 备份现有 `config.toml`、个人市场文件及旧版插件。
 4. 保留目标设备原有 `notify` 命令，并由新插件继续转发。
-5. 安装插件到 `%USERPROFILE%\plugins\codex-task-announcer`。
-6. 更新默认个人市场并运行 `codex plugin add`。
-7. 写出安装结果 JSON 和备份位置。
+5. 默认开启自动化任务静音，并在升级时保留用户已有的开关选择。
+6. 安装插件到 `%USERPROFILE%\plugins\codex-task-announcer`。
+7. 更新默认个人市场并运行 `codex plugin add`。
+8. 写出安装结果 JSON 和备份位置。
 
-安装后应完全退出并重新打开 Codex。在线语音只发送“项目名称 + 已完成”这一句，不发送任务内容或代码；生成的音频会缓存在 `%LOCALAPPDATA%\CodexTaskAnnouncer\audio-cache`。
+安装后应完全退出并重新打开 Codex。在线语音只发送“项目名称 + 已完成”这一句，不发送任务内容或代码；生成的音频会缓存在 `%LOCALAPPDATA%\CodexTaskAnnouncer\audio-cache`。自动化识别依赖事件元数据和 `%CODEX_HOME%\automations` 中的目标线程配置；未明确识别的普通任务会继续播报。

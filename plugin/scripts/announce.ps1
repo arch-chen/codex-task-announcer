@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [string]$EventJson
+    [string]$EventJson,
+    [switch]$RoutingOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,6 +24,102 @@ function Write-AnnouncerLog {
     catch {
         # Notification failures must never affect the Codex turn.
     }
+}
+
+function Get-EventValue {
+    param(
+        [object]$Event,
+        [string[]]$Names
+    )
+
+    foreach ($name in $Names) {
+        $property = $Event.PSObject.Properties | Where-Object { $_.Name -ieq $name } | Select-Object -First 1
+        if ($property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+            return [string]$property.Value
+        }
+    }
+    return ''
+}
+
+function Get-TomlStringValue {
+    param(
+        [string]$Content,
+        [string]$Key
+    )
+
+    $pattern = '(?m)^\s*' + [regex]::Escape($Key) + '\s*=\s*["''](?<value>[^"'']*)["'']\s*(?:#.*)?$'
+    $match = [regex]::Match($Content, $pattern)
+    if ($match.Success) {
+        return $match.Groups['value'].Value
+    }
+    return ''
+}
+
+function Get-CodexHome {
+    if (-not [string]::IsNullOrWhiteSpace([string]$env:CODEX_HOME)) {
+        return [string]$env:CODEX_HOME
+    }
+    return Join-Path $env:USERPROFILE '.codex'
+}
+
+function Get-AutomationMatch {
+    param([object]$Event)
+
+    $threadId = Get-EventValue -Event $Event -Names @('thread-id', 'thread_id', 'threadId')
+    $threadSource = Get-EventValue -Event $Event -Names @('thread-source', 'thread_source', 'threadSource')
+    if ($threadSource -ieq 'automation') {
+        $automationId = Get-EventValue -Event $Event -Names @('automation-id', 'automation_id', 'automationId')
+        $kind = Get-EventValue -Event $Event -Names @('automation-kind', 'automation_kind', 'automationKind')
+        if ([string]::IsNullOrWhiteSpace($automationId)) { $automationId = 'event-metadata' }
+        if ([string]::IsNullOrWhiteSpace($kind)) { $kind = 'automation' }
+        return [PSCustomObject]@{
+            Id = $automationId
+            Kind = $kind
+            ThreadId = $threadId
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($threadId)) {
+        return $null
+    }
+
+    $automationsRoot = Join-Path (Get-CodexHome) 'automations'
+    if (-not (Test-Path -LiteralPath $automationsRoot -PathType Container)) {
+        return $null
+    }
+
+    try {
+        $automationFiles = @(Get-ChildItem -LiteralPath $automationsRoot -Filter 'automation.toml' -File -Recurse -ErrorAction Stop)
+    }
+    catch {
+        Write-AnnouncerLog "Automation metadata scan failed; announcement remains enabled: $($_.Exception.Message)"
+        return $null
+    }
+
+    foreach ($automationFile in $automationFiles) {
+        try {
+            $content = Get-Content -LiteralPath $automationFile.FullName -Raw -Encoding UTF8 -ErrorAction Stop
+            $targetThreadId = Get-TomlStringValue -Content $content -Key 'target_thread_id'
+            if ($targetThreadId -ne $threadId) {
+                continue
+            }
+
+            $automationId = Get-TomlStringValue -Content $content -Key 'id'
+            $kind = Get-TomlStringValue -Content $content -Key 'kind'
+            if ([string]::IsNullOrWhiteSpace($automationId)) { $automationId = $automationFile.Directory.Name }
+            if ([string]::IsNullOrWhiteSpace($kind)) { $kind = 'automation' }
+            return [PSCustomObject]@{
+                Id = $automationId
+                Kind = $kind
+                ThreadId = $threadId
+            }
+        }
+        catch {
+            Write-AnnouncerLog "Ignored unreadable automation metadata: $($automationFile.FullName)"
+        }
+    }
+
+    return $null
 }
 
 function Resolve-ForwardExecutable {
@@ -365,14 +462,32 @@ try {
     }
 
     $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    Invoke-ForwardNotifier -Settings $settings -Payload $EventJson
+    if (-not $RoutingOnly) {
+        Invoke-ForwardNotifier -Settings $settings -Payload $EventJson
+    }
 
     if ($settings.enabled -eq $false) {
+        if ($RoutingOnly) { Write-Output 'ignore:disabled' }
         exit 0
     }
 
     $event = $EventJson | ConvertFrom-Json
     if ([string]$event.type -ne 'agent-turn-complete') {
+        if ($RoutingOnly) { Write-Output 'ignore:event-type' }
+        exit 0
+    }
+
+    if ($settings.suppressAutomationAnnouncements -ne $false) {
+        $automation = Get-AutomationMatch -Event $event
+        if ($automation) {
+            Write-AnnouncerLog "Skipped automation announcement: $($automation.Kind) $($automation.Id) thread $($automation.ThreadId)"
+            if ($RoutingOnly) { Write-Output 'skip:automation' }
+            exit 0
+        }
+    }
+
+    if ($RoutingOnly) {
+        Write-Output 'announce'
         exit 0
     }
 

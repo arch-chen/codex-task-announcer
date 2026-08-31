@@ -111,6 +111,7 @@ foreach ($required in @(
 }
 
 Test-PackageIntegrity
+$packageManifest = Get-Content -LiteralPath (Join-Path $packageRoot 'package-manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $manifest = Get-Content -LiteralPath (Join-Path $sourcePlugin '.codex-plugin\plugin.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $templateSettings = Get-Content -LiteralPath (Join-Path $sourcePlugin 'project-names.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $userHome = [Environment]::GetFolderPath('UserProfile')
@@ -121,7 +122,7 @@ if (-not $codexCommand) { throw 'Codex CLI was not found in PATH.' }
 
 if ($ValidateOnly) {
     [PSCustomObject]@{
-        Package = 'CodexTaskAnnouncer-Portable-20260828'
+        Package = '{0}-{1}' -f [string]$packageManifest.packageName, [string]$packageManifest.packageVersion
         PluginVersion = $manifest.version
         VoiceCount = @($templateSettings.onlineTts.voices).Count
         Node = $node
@@ -187,7 +188,12 @@ if (-not $selectedVoice) { throw "Voice alias is not available: $Voice" }
 $settings.onlineTts.voice = [string]$selectedVoice.id
 $settings.onlineTts.nodePath = $node
 $settings.forwardCommand = @($previousForward)
-if ($existingSettings) { $settings.projects = @($existingSettings.projects | Where-Object { $_ }) }
+if ($existingSettings) {
+    $settings.projects = @($existingSettings.projects | Where-Object { $_ })
+    if ($existingSettings.PSObject.Properties.Name -contains 'suppressAutomationAnnouncements') {
+        $settings.suppressAutomationAnnouncements = [bool]$existingSettings.suppressAutomationAnnouncements
+    }
+}
 Add-OrReplaceProject -Settings $settings -Path $ProjectPath -Name $ProjectName
 Write-JsonFile -Path $settingsPath -Value $settings
 
